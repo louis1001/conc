@@ -1,0 +1,9 @@
+[package]
+name = "vm_in_rust"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+num_enum = "0.7.1"
+anyhow = "1.0.75"
+num = "0.4.1"
