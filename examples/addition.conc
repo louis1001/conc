@@ -1,0 +1,12 @@
+10 20 + drop
+loop
+    "hello" print
+end
+
+1 2 < if
+    "1 is less than 2"
+else
+    "1 is not less than 2"
+end
+
+print
