@@ -1,5 +1,5 @@
 [package]
-name = "vm_in_rust"
+name = "conc"
 version = "0.1.0"
 edition = "2021"
 

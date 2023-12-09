@@ -3,7 +3,7 @@ mod conc;
 mod bytecode;
 
 fn main() -> Result<()> {
-    let codegen = conc::Codegen::new();
+    let mut codegen = conc::Codegen::new();
     let mut typecheck = conc::Typechecker::new();
 
     let code = vec![
@@ -11,7 +11,11 @@ fn main() -> Result<()> {
         conc::Action::PushInt(2),
         conc::Action::Intrinsic(conc::Intrinsic::Add),
         conc::Action::PushInt(10),
-        conc::Action::Intrinsic(conc::Intrinsic::LessThan)
+        conc::Action::Intrinsic(conc::Intrinsic::LessThan),
+        conc::Action::Loop(vec![
+            conc::Action::PushInt(10),
+            conc::Action::Intrinsic(conc::Intrinsic::Drop)
+        ])
     ];
 
     typecheck.typecheck_program(&code)?;

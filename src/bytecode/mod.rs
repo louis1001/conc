@@ -51,7 +51,7 @@ impl IterToPrimitive for core::slice::Iter<'_, u8> {
 }
 
 #[derive(IntoPrimitive, TryFromPrimitive)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[repr(u8)]
 pub enum Opcode {
     Nop = 0x00,
@@ -94,25 +94,32 @@ impl Program {
     pub fn dissassemble(&self) -> Result<()> {
         let mut iter = self.data.iter();
 
+        let mut counter: usize = 0;
+
         while let Some(bt) = iter.next() {
             let op: Opcode = (*bt).try_into()
                 .context(format!("Byte {bt:#X} is not a valid opcode. Maybe there's an offset problem?"))?;
+            print!("0x{:04X}\t", counter);
             print!("    {op:?} ");
+
+            counter += 1;
 
             match op {
                 Opcode::Psh => {
                     // println!("\n-----\n{:?}\n-----\n", iter);
                     // let slice: &[u8; 8] = iter.as_slice().try_into()?;
                     // let num: u64 = u64::from_be_bytes(*slice);
+                    counter += std::mem::size_of::<u64>();
                     let num = iter.cast_to::<u64>();
                     
-                    print!("{}", num);
+                    print!("0x{:04X}", num);
 
                     // println!("\n-----\n{:?}\n-----\n", iter);
                 },
                 Opcode::Str => {
                     print!("\"");
                     while let Some(c) = iter.next() {
+                        counter += 1;
                         if *c == b'\0' { break; } // C str
 
                         // TODO: Escape characters
@@ -188,7 +195,7 @@ impl ProgramBuilder {
         }
     }
 
-    pub fn to_program(self) -> Result<Program> {
+    pub fn to_program(&self) -> Result<Program> {
         let mut instruction_addrs = vec![];
         instruction_addrs.reserve(self.instructions.len());
 
@@ -214,7 +221,7 @@ impl ProgramBuilder {
             label_addrs.insert(key, instruction_index);
         }
 
-        for instruction in self.instructions {
+        for instruction in self.instructions.iter() {
             match instruction {
                 Instruction::Push(val) => {
                     data.push(Opcode::Psh.into());
@@ -237,7 +244,7 @@ impl ProgramBuilder {
                     data.push('\0' as u8);
                 },
                 Instruction::Single(opcode) => {
-                    data.push(opcode.into());
+                    data.push((*opcode).clone().into());
                 },
             }
         }
