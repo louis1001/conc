@@ -1,8 +1,11 @@
+pub mod frontend;
+
 use anyhow::{Result, anyhow};
 use crate::bytecode::{self, ProgramBuilder as BytecodeBuilder};
 
 pub enum Intrinsic {
     Add,
+    Sub,
     LessThan,
     Drop
 }
@@ -31,6 +34,7 @@ impl Codegen {
                 Action::Intrinsic(intr) => {
                     match intr {
                         Intrinsic::Add => self.pb.emit_instruction(bytecode::Opcode::Add),
+                        Intrinsic::Sub => self.pb.emit_instruction(bytecode::Opcode::Sub),
                         Intrinsic::LessThan => self.pb.emit_instruction(bytecode::Opcode::Lt),
                         Intrinsic::Drop => self.pb.emit_instruction(bytecode::Opcode::Drp)
                     }
@@ -78,7 +82,7 @@ impl Typechecker {
                 },
                 Action::Intrinsic(intr) => {
                     match intr {
-                        Intrinsic::Add => {
+                        Intrinsic::Add | Intrinsic::Sub => {
                             let a = self.stack_tracker.pop();
                             let b = self.stack_tracker.pop();
 

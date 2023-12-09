@@ -1,0 +1,21 @@
+WHITESPACE = _{ " " | "\t" | "\n" }
+
+statement_list = { statement* }
+
+program = _{ SOI ~ statement_list ~ EOI }
+
+drop = { "drop "}
+add = { "+" }
+sub = { "-" }
+less_than = { "<" }
+
+intrinsic = _{ drop | add | sub | less_than }
+
+BLOCK_TERMINATOR = _{ "end" }
+
+integer        = @{ (ASCII_NONZERO_DIGIT ~ (ASCII_DIGIT)*) | "0" }
+string         = @{ "\"" ~ (!"\"" ~ ANY) ~ "\"" }
+
+loop_st = { "loop" ~ statement_list ~ BLOCK_TERMINATOR }
+
+statement = _{ integer | string | intrinsic | loop_st }
