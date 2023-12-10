@@ -136,6 +136,10 @@ impl Program {
 
         Ok(())
     }
+
+    pub fn bytes(&self) -> &[u8] {
+        &self.data
+    }
 }
 
 #[derive(Debug)]
@@ -213,7 +217,7 @@ impl ProgramBuilder {
         let mut label_addrs = HashMap::new();
         for (key, val) in self.labels.iter() {
             let index = match *val {
-                Some(val) => val - 1,
+                Some(val) => val,
                 None => return Err(anyhow!("Trying to push unlinked label {key}")),
             };
 

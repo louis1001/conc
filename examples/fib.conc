@@ -1,0 +1,9 @@
+# A fibonacci example
+
+1 0
+while dup 200 < do
+    dup rot +
+    dup debug
+end
+
+drop drop

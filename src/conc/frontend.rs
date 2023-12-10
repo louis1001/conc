@@ -31,6 +31,9 @@ pub fn parse_conc(code: &str) -> Result<Vec<Action>> {
             Rule::sub => Ok(Action::Intrinsic(Intrinsic::Sub)),
             Rule::less_than => Ok(Action::Intrinsic(Intrinsic::LessThan)),
             Rule::drop => Ok(Action::Intrinsic(Intrinsic::Drop)),
+            Rule::debug => Ok(Action::Intrinsic(Intrinsic::Debug)),
+            Rule::dup => Ok(Action::Intrinsic(Intrinsic::Dup)),
+            Rule::rot => Ok(Action::Intrinsic(Intrinsic::Rot)),
             Rule::pnt => Ok(Action::Intrinsic(Intrinsic::Print)),
             Rule::integer => Ok(Action::PushInt(pair.as_str().parse()?)),
             // FIXME: Do correct parsing of the string
@@ -59,6 +62,22 @@ pub fn parse_conc(code: &str) -> Result<Vec<Action>> {
 
                 Ok(Action::If(statements, else_values))
             }
+            Rule::while_st => {
+                let mut pairs = pair.into_inner();
+                let value = pairs.next()
+                    .ok_or(anyhow!("Expected a condition for while statement"))?
+                    .into_inner();
+
+                let condition = parse_statement_list(value)?;
+
+                let statements = pairs.next()
+                    .ok_or(anyhow!("Expected a statement list inside while statement"))?
+                    .into_inner();
+
+                let body = parse_statement_list(statements)?;
+
+                Ok(Action::While(condition, body))
+            }
               Rule::program
             | Rule::statement
             | Rule::intrinsic
@@ -66,6 +85,7 @@ pub fn parse_conc(code: &str) -> Result<Vec<Action>> {
             | Rule::EOI
             | Rule::BLOCK_TERMINATOR
             | Rule::WHITESPACE 
+            | Rule::COMMENT
             | Rule::statement_list => {
                 println!("{pair:?}");
                 unreachable!()

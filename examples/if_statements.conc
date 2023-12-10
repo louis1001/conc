@@ -1,0 +1,12 @@
+10 # Pushes this value at the start
+
+1 2 < if
+    2 + # Type checker accepts modifying the stack in a block,
+        # as long as it doesn't affect its shape
+
+    "1 is less than 2" # At the end of the if, there's a Ptr and U64 in the stack.
+else
+    "1 is not less than 2" # Since it matches in both branches, it's valid
+end print
+
+debug # And prints it at the end

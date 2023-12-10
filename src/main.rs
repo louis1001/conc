@@ -21,5 +21,11 @@ fn main() -> Result<()> {
     let program = codegen.get_program()?;
     program.dissassemble()?;
 
+    if let Some(output_file) = args.next() {
+        std::fs::write(output_file.clone(), program.bytes())?;
+
+        println!("Exported program as {output_file}");
+    }
+
     Ok(())
 }
