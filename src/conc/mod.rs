@@ -12,7 +12,9 @@ pub enum Intrinsic {
     Drop,
     Dup,
     Rot,
-    Debug
+    Debug,
+
+    Break
 }
 
 #[derive(Debug)]
@@ -54,6 +56,7 @@ impl Codegen {
                         Intrinsic::Rot => self.pb.emit_instruction(bytecode::Opcode::Rot),
                         Intrinsic::Debug => self.pb.emit_instruction(bytecode::Opcode::Dbg),
                         Intrinsic::Print => self.pb.emit_instruction(bytecode::Opcode::Pnt),
+                        Intrinsic::Break => self.pb.emit_instruction(bytecode::Opcode::Bkp),
                     }
                 }
                 Action::Loop(contents) => {
@@ -233,6 +236,8 @@ impl Typechecker {
                             }
                         }
                     }
+
+                    Intrinsic::Break => {}
                 }
             }
             Action::Loop(contents) => {

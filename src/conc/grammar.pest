@@ -1,31 +1,43 @@
 WHITESPACE = _{ " " | "\t" | "\n" }
-COMMENT = _{ "#" ~ (!("\n" | EOI) ~ ANY)* ~ ("\n" | EOI) }
+COMMENT    = _{ "#" ~ (!("\n" | EOI) ~ ANY)* ~ ("\n" | EOI) }
 
 statement_list = { statement* }
 
 program = _{ SOI ~ statement_list ~ EOI }
 
-drop = { "drop"}
-dup = { "dup" }
-add = { "+" }
-sub = { "-" }
+drop      = { "drop" }
+dup       = { "dup" }
+add       = { "+" }
+sub       = { "-" }
 less_than = { "<" }
-pnt = { "print" }
-debug = { "debug" }
-rot = { "rot" }
+pnt       = { "print" }
+debug     = { "debug" }
+rot       = { "rot" }
 
-intrinsic = _{ drop | dup | rot | debug | add | sub | less_than | pnt }
+break = { "break" }
+
+intrinsic = _{
+    drop
+  | dup
+  | rot
+  | debug
+  | add
+  | sub
+  | less_than
+  | pnt
+  | break
+}
 
 BLOCK_TERMINATOR = _{ "end" }
 
-integer        = @{ (ASCII_NONZERO_DIGIT ~ (ASCII_DIGIT)*) | "0" }
+integer = @{ (ASCII_NONZERO_DIGIT ~ (ASCII_DIGIT)*) | "0" }
 
 // https://github.com/pest-parser/book/blob/master/src/examples/rust/literals.md#strings
-string         = @{ "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
+string = @{ "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
 
-loop_st = { "loop" ~ statement_list ~ BLOCK_TERMINATOR }
+loop_st =  { "loop" ~ statement_list ~ BLOCK_TERMINATOR }
 else_st = _{ "else" ~ statement_list }
-if_st = { "if" ~ statement_list ~ (else_st)? ~ BLOCK_TERMINATOR }
+if_st   =  { "if" ~ statement_list ~ (else_st)? ~ BLOCK_TERMINATOR }
 
 while_st = { "while" ~ statement_list ~ "do" ~ statement_list ~ BLOCK_TERMINATOR }
 

@@ -4,6 +4,7 @@
 while dup 200 < do
     dup rot +
     dup debug
+    " " print
 end
 
 drop drop

@@ -9,4 +9,6 @@ else
     "1 is not less than 2" # Since it matches in both branches, it's valid
 end print
 
+" - debug - " print
+
 debug # And prints it at the end

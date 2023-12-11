@@ -35,9 +35,10 @@ pub fn parse_conc(code: &str) -> Result<Vec<Action>> {
             Rule::dup => Ok(Action::Intrinsic(Intrinsic::Dup)),
             Rule::rot => Ok(Action::Intrinsic(Intrinsic::Rot)),
             Rule::pnt => Ok(Action::Intrinsic(Intrinsic::Print)),
+            Rule::r#break => Ok(Action::Intrinsic(Intrinsic::Break)),
             Rule::integer => Ok(Action::PushInt(pair.as_str().parse()?)),
             // FIXME: Do correct parsing of the string
-            Rule::string => Ok(Action::PushString(pair.as_str().to_string().trim_matches('"').to_string())),
+            Rule::string => Ok(Action::PushString(pair.as_str().trim_matches('"').to_string())),
             Rule::loop_st => {
                 let value = pair.into_inner().next()
                     .ok_or(anyhow!("Expected a statement list inside the loop"))?

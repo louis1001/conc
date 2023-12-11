@@ -37,13 +37,15 @@ impl IterToPrimitive for core::slice::Iter<'_, u8> {
         let mut result = Zero::zero();
         let size = size_of::<T>();
 
-        for _ in 0..size {
+        for i in 0..size {
             let byte = match self.next() {
                 Some(n) => n,
                 None => return result
             };
 
-            result = (result << 1) | (*byte).into();
+            let byte_as_t: T = (*byte).into();
+
+            result = result | (byte_as_t << (i as u32));
         }
 
         result
@@ -117,10 +119,18 @@ impl Program {
                     // println!("\n-----\n{:?}\n-----\n", iter);
                 },
                 Opcode::Str => {
+                    counter += std::mem::size_of::<u64>();
+                    let num = iter.cast_to::<u64>();
+                    print!("({num:#X}) ");
                     print!("\"");
-                    while let Some(c) = iter.next() {
+
+                    for _ in 0..num {
+                        let c = match iter.next() {
+                            Some(n) => n,
+                            None => break
+                        };
+
                         counter += 1;
-                        if *c == b'\0' { break; } // C str
 
                         // TODO: Escape characters
 
@@ -153,9 +163,12 @@ pub enum Instruction {
 impl Instruction {
     fn size(&self) -> usize {
         match self {
-            Instruction::Push(_) => 1 + size_of::<u64>(),
-            Instruction::PushLabel(_) => 1 + size_of::<u64>(),
-            Instruction::String(val) => 1 + val.bytes().len() + 1, // \0 terminated
+            Instruction::Push(_) | Instruction::PushLabel(_) => 1 + size_of::<u64>(),
+            Instruction::String(val) => {
+                1 +                     // Opcode
+                size_of::<u64>() +      // len 
+                val.bytes().len()       // chars
+             }
             Instruction::Single(_) => 1,
         }
     }
@@ -229,7 +242,7 @@ impl ProgramBuilder {
             match instruction {
                 Instruction::Push(val) => {
                     data.push(Opcode::Psh.into());
-                    data.extend_from_slice(&val.to_be_bytes());
+                    data.extend_from_slice(&val.to_le_bytes());
                 },
                 Instruction::PushLabel(lbl) => {
                     data.push(Opcode::Psh.into());
@@ -238,14 +251,16 @@ impl ProgramBuilder {
                         None => return Err(anyhow!("Trying to push unknown lable {lbl}")),
                     };
 
-                    data.extend_from_slice(&label_value.to_be_bytes());
+                    data.extend_from_slice(&label_value.to_le_bytes());
                 },
                 Instruction::String(str) => {
                     data.push(Opcode::Str.into());
 
-                    data.extend_from_slice(str.as_bytes());
+                    let length = str.len();
 
-                    data.push('\0' as u8);
+                    data.extend_from_slice(&length.to_le_bytes());
+
+                    data.extend_from_slice(str.as_bytes());
                 },
                 Instruction::Single(opcode) => {
                     data.push((*opcode).clone().into());
