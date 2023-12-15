@@ -5,24 +5,34 @@ statement_list = { statement* }
 
 program = _{ SOI ~ statement_list ~ EOI }
 
-drop      = { "drop" }
-dup       = { "dup" }
-add       = { "+" }
-sub       = { "-" }
-less_than = { "<" }
-pnt       = { "print" }
-debug     = { "debug" }
-rot       = { "rot" }
+drop       = { "drop" }
+dup        = { "dup" }
+over       = { "over" }
+add        = { "+" }
+sub        = { "-" }
+mul        = { "*" }
+less_than  = { "<" }
+mod        = { "%" }
+equals     = { "=" }
+not_equals = { "!=" }
+pnt        = { "print" }
+debug      = { "debug" }
+rot        = { "rot" }
 
 break = { "break" }
 
 intrinsic = _{
     drop
   | dup
+  | over
   | rot
   | debug
   | add
   | sub
+  | mul
+  | mod
+  | equals
+  | not_equals
   | less_than
   | pnt
   | break

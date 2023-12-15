@@ -66,6 +66,7 @@ pub enum Opcode {
     Equ = 0x08,
     Lt  = 0x09,
     Gt  = 0x1B,
+    Not = 0x21,
     Jmp = 0x0A,
     Jpt = 0x0B,
     Jpf = 0x0C,

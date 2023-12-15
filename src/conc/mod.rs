@@ -7,11 +7,20 @@ use crate::bytecode::{self, ProgramBuilder as BytecodeBuilder};
 pub enum Intrinsic {
     Add,
     Sub,
+    Mul,
+    Mod,
+
     Print,
+    
     LessThan,
+    Equals,
+    NotEquals,
+    Not,
+
     Drop,
     Dup,
     Rot,
+    Over,
     Debug,
 
     Break
@@ -50,10 +59,19 @@ impl Codegen {
                     match intr {
                         Intrinsic::Add => self.pb.emit_instruction(bytecode::Opcode::Add),
                         Intrinsic::Sub => self.pb.emit_instruction(bytecode::Opcode::Sub),
+                        Intrinsic::Mul => self.pb.emit_instruction(bytecode::Opcode::Mul),
+                        Intrinsic::Mod => self.pb.emit_instruction(bytecode::Opcode::Mod),
                         Intrinsic::LessThan => self.pb.emit_instruction(bytecode::Opcode::Lt),
+                        Intrinsic::Equals => self.pb.emit_instruction(bytecode::Opcode::Equ),
+                        Intrinsic::NotEquals => {
+                            self.pb.emit_instruction(bytecode::Opcode::Equ);
+                            self.pb.emit_instruction(bytecode::Opcode::Not);
+                        },
+                        Intrinsic::Not => self.pb.emit_instruction(bytecode::Opcode::Not),
                         Intrinsic::Drop => self.pb.emit_instruction(bytecode::Opcode::Drp),
                         Intrinsic::Dup => self.pb.emit_instruction(bytecode::Opcode::Dup),
                         Intrinsic::Rot => self.pb.emit_instruction(bytecode::Opcode::Rot),
+                        Intrinsic::Over => self.pb.emit_instruction(bytecode::Opcode::Ovr),
                         Intrinsic::Debug => self.pb.emit_instruction(bytecode::Opcode::Dbg),
                         Intrinsic::Print => self.pb.emit_instruction(bytecode::Opcode::Pnt),
                         Intrinsic::Break => self.pb.emit_instruction(bytecode::Opcode::Bkp),
@@ -154,7 +172,7 @@ impl Typechecker {
             },
             Action::Intrinsic(intr) => {
                 match intr {
-                    Intrinsic::Add | Intrinsic::Sub => {
+                    Intrinsic::Add | Intrinsic::Sub | Intrinsic::Mul | Intrinsic::Mod => {
                         let a = self.stack_tracker.pop();
                         let b = self.stack_tracker.pop();
 
@@ -163,7 +181,32 @@ impl Typechecker {
                                 self.stack_tracker.push(StackPoint::U64);
                             }
                             _ => {
-                                return Err(anyhow!("Intrinsic Add needs 2 u64 values on the stack"));
+                                return Err(anyhow!("Intrinsic {intr:?} needs 2 u64 values on the stack"));
+                            }
+                        }
+                    },
+                    Intrinsic::Equals | Intrinsic::NotEquals => {
+                        let a = self.stack_tracker.pop();
+                        let b = self.stack_tracker.pop();
+
+                        match (a, b) {
+                            (Some(StackPoint::U64), Some(StackPoint::U64)) => {
+                                self.stack_tracker.push(StackPoint::Bool);
+                            }
+                            _ => {
+                                return Err(anyhow!("Intrinsic {intr:?} needs 2 u64 values on the stack"));
+                            }
+                        }
+                    },
+                    Intrinsic::Not => {
+                        let a = self.stack_tracker.pop();
+
+                        match a {
+                            Some(StackPoint::Bool) => {
+                                self.stack_tracker.push(StackPoint::Bool);
+                            }
+                            _ => {
+                                return Err(anyhow!("Intrinsic Not needs 2 u64 values on the stack"));
                             }
                         }
                     },
@@ -212,6 +255,21 @@ impl Typechecker {
                             }
                             _ => {
                                 return Err(anyhow!("Intrinsic Rot needs 3 u64 values on the stack"));
+                            }
+                        }
+                    },
+                    Intrinsic::Over => {
+                        let a = self.stack_tracker.pop();
+                        let b = self.stack_tracker.pop();
+
+                        match (a, b) {
+                            (Some(StackPoint::U64), Some(StackPoint::U64)) => {
+                                self.stack_tracker.push(StackPoint::U64);
+                                self.stack_tracker.push(StackPoint::U64);
+                                self.stack_tracker.push(StackPoint::U64);
+                            }
+                            _ => {
+                                return Err(anyhow!("Intrinsic Over needs 2 u64 values on the stack"));
                             }
                         }
                     },
