@@ -4,7 +4,7 @@
 while dup 200 < do
     dup rot +
     dup debug
-    " " print
+    ' ' putc
 end
 
 drop drop

@@ -1,11 +1,11 @@
 
-0 while dup 1024 < do
+1 while dup 200 < do
     dup 3 % 0 = if
-        "Fizz" print
+        "Fizz" puts
     end
 
     dup 5 % 0 = if
-        "Buzz" print
+        "Buzz" puts
     end
 
     dup 3 %
@@ -15,7 +15,7 @@
         dup debug
     end
 
-    " " print
+    '\n' putc
     
     1 +
 end drop

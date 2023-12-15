@@ -67,14 +67,15 @@ pub enum Opcode {
     Lt  = 0x09,
     Gt  = 0x1B,
     Not = 0x21,
+    Or  = 0x22,
     Jmp = 0x0A,
     Jpt = 0x0B,
     Jpf = 0x0C,
     Cll = 0x0d,
     Str = 0x0E,
-    Pnt = 0x0F,
+    Pts = 0x0F,
     Dbg = 0x10,
-    Pch = 0x20,
+    Ptc = 0x20,
     Inc = 0x11,
     Dec = 0x12,
     Psh = 0x13,
@@ -85,6 +86,7 @@ pub enum Opcode {
     Ovr = 0x18,
     Ref = 0x30,
     Rf8 = 0x31,
+    Ps8 = 0x40,
     Bkp = 0xFE,
     Ext = 0xFF
 }
@@ -119,6 +121,17 @@ impl Program {
 
                     // println!("\n-----\n{:?}\n-----\n", iter);
                 },
+                Opcode::Ps8 => {
+                    // println!("\n-----\n{:?}\n-----\n", iter);
+                    // let slice: &[u8; 8] = iter.as_slice().try_into()?;
+                    // let num: u64 = u64::from_be_bytes(*slice);
+                    counter += 1;
+                    let num = iter.cast_to::<u8>();
+                    
+                    print!("0x{:02X}", num);
+
+                    // println!("\n-----\n{:?}\n-----\n", iter);
+                },
                 Opcode::Str => {
                     counter += std::mem::size_of::<u64>();
                     let num = iter.cast_to::<u64>();
@@ -135,7 +148,13 @@ impl Program {
 
                         // TODO: Escape characters
 
-                        print!("{}", *c as char);
+                        match *c as char {
+                            '\n' => print!("\\n"),
+                            '\t' => print!("\\t"),
+                            '\r' => print!("\\r"),
+                            '\"' => print!("\\\""),
+                            c => print!("{}", c)
+                        }
                     }
                     print!("\"");
                 },
@@ -156,6 +175,7 @@ impl Program {
 #[derive(Debug)]
 pub enum Instruction {
     Push(u64),
+    PushByte(u8),
     PushLabel(String),
     String(String),
     Single(Opcode),
@@ -163,14 +183,15 @@ pub enum Instruction {
 
 impl Instruction {
     fn size(&self) -> usize {
+        1 +
         match self {
-            Instruction::Push(_) | Instruction::PushLabel(_) => 1 + size_of::<u64>(),
+            Instruction::Push(_) | Instruction::PushLabel(_) => size_of::<u64>(),
+            Instruction::PushByte(_) => size_of::<u8>(),
             Instruction::String(val) => {
-                1 +                     // Opcode
                 size_of::<u64>() +      // len 
                 val.bytes().len()       // chars
              }
-            Instruction::Single(_) => 1,
+            Instruction::Single(_) => 0,
         }
     }
 }
@@ -254,6 +275,10 @@ impl ProgramBuilder {
 
                     data.extend_from_slice(&label_value.to_le_bytes());
                 },
+                Instruction::PushByte(b) => {
+                    data.push(Opcode::Ps8.into());
+                    data.push(*b);
+                }
                 Instruction::String(str) => {
                     data.push(Opcode::Str.into());
 

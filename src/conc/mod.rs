@@ -11,11 +11,13 @@ pub enum Intrinsic {
     Mod,
 
     Print,
+    PrintChar,
     
     LessThan,
     Equals,
     NotEquals,
     Not,
+    Or,
 
     Drop,
     Dup,
@@ -30,6 +32,8 @@ pub enum Intrinsic {
 pub enum Action {
     PushInt(u64),
     PushString(String),
+    PushBool(bool),
+    PushChar(u8),
     Intrinsic(Intrinsic),
 
     If(Vec<Action>, Option<Vec<Action>>),
@@ -55,6 +59,10 @@ impl Codegen {
                 Action::PushString(val) => {
                     self.pb.emit(bytecode::Instruction::String(val.clone()));
                 }
+                Action::PushBool(val) => self.pb.emit(bytecode::Instruction::PushByte(*val as u8)),
+                Action::PushChar(c) => {
+                    self.pb.emit(bytecode::Instruction::PushByte(*c));
+                }
                 Action::Intrinsic(intr) => {
                     match intr {
                         Intrinsic::Add => self.pb.emit_instruction(bytecode::Opcode::Add),
@@ -68,12 +76,14 @@ impl Codegen {
                             self.pb.emit_instruction(bytecode::Opcode::Not);
                         },
                         Intrinsic::Not => self.pb.emit_instruction(bytecode::Opcode::Not),
+                        Intrinsic::Or => self.pb.emit_instruction(bytecode::Opcode::Or),
                         Intrinsic::Drop => self.pb.emit_instruction(bytecode::Opcode::Drp),
                         Intrinsic::Dup => self.pb.emit_instruction(bytecode::Opcode::Dup),
                         Intrinsic::Rot => self.pb.emit_instruction(bytecode::Opcode::Rot),
                         Intrinsic::Over => self.pb.emit_instruction(bytecode::Opcode::Ovr),
                         Intrinsic::Debug => self.pb.emit_instruction(bytecode::Opcode::Dbg),
-                        Intrinsic::Print => self.pb.emit_instruction(bytecode::Opcode::Pnt),
+                        Intrinsic::Print => self.pb.emit_instruction(bytecode::Opcode::Pts),
+                        Intrinsic::PrintChar => self.pb.emit_instruction(bytecode::Opcode::Ptc),
                         Intrinsic::Break => self.pb.emit_instruction(bytecode::Opcode::Bkp),
                     }
                 }
@@ -170,6 +180,10 @@ impl Typechecker {
                 self.stack_tracker.push(StackPoint::Ptr);
                 self.stack_tracker.push(StackPoint::U64);
             },
+            Action::PushBool(_) => {
+                self.stack_tracker.push(StackPoint::Bool);
+            },
+            Action::PushChar(_) => self.stack_tracker.push(StackPoint::U8),
             Action::Intrinsic(intr) => {
                 match intr {
                     Intrinsic::Add | Intrinsic::Sub | Intrinsic::Mul | Intrinsic::Mod => {
@@ -207,6 +221,19 @@ impl Typechecker {
                             }
                             _ => {
                                 return Err(anyhow!("Intrinsic Not needs 2 u64 values on the stack"));
+                            }
+                        }
+                    },
+                    Intrinsic::Or => {
+                        let a = self.stack_tracker.pop();
+                        let b = self.stack_tracker.pop();
+
+                        match (a, b) {
+                            (Some(StackPoint::Bool), Some(StackPoint::Bool)) => {
+                                self.stack_tracker.push(StackPoint::Bool);
+                            }
+                            _ => {
+                                return Err(anyhow!("Intrinsic {intr:?} needs 2 bool values on the stack"));
                             }
                         }
                     },
@@ -291,6 +318,16 @@ impl Typechecker {
                             (Some(StackPoint::U64), Some(StackPoint::Ptr)) => {}
                             _ => {
                                 return Err(anyhow!("Intrinsic Print needs a string length (u64) and a pointer (&str) value on the stack"));
+                            }
+                        }
+                    }
+                    Intrinsic::PrintChar => {
+                        let a = self.stack_tracker.pop();
+
+                        match a {
+                            Some(StackPoint::U8) => {}
+                            _ => {
+                                return Err(anyhow!("Intrinsic PrintChar needs a char value on the stack"));
                             }
                         }
                     }
