@@ -1,9 +1,12 @@
 pub mod frontend;
 
-use anyhow::{Result, anyhow};
+use anyhow::{Result, anyhow, Context};
 use crate::bytecode::{self, ProgramBuilder as BytecodeBuilder};
 
-#[derive(Debug)]
+use std::collections::HashMap;
+use std::fmt::Write;
+
+#[derive(Debug, Clone)]
 pub enum Intrinsic {
     Add,
     Sub,
@@ -14,6 +17,7 @@ pub enum Intrinsic {
     PrintChar,
     
     LessThan,
+    GreaterThan,
     Equals,
     NotEquals,
     Not,
@@ -28,48 +32,208 @@ pub enum Intrinsic {
     Break
 }
 
-#[derive(Debug)]
-pub enum Action {
+#[derive(Debug, Clone)]
+pub enum ParseTree {
     PushInt(u64),
     PushString(String),
     PushBool(bool),
     PushChar(u8),
     Intrinsic(Intrinsic),
 
-    If(Vec<Action>, Option<Vec<Action>>),
+    If(Vec<ParseTree>, Option<Vec<ParseTree>>),
 
-    While(Vec<Action>, Vec<Action>),
-    Loop(Vec<Action>)
+    While(Vec<ParseTree>, Vec<ParseTree>),
+    Loop(Vec<ParseTree>),
+
+    FunctionCall(String),
+
+    Function(String, Vec<StackPoint>, Vec<StackPoint>, Vec<ParseTree>)
+}
+
+impl ParseTree {
+    fn internals_to_semantic(&self) -> Result<SemanticTree> {
+        let node = match self {
+            ParseTree::PushInt(v) => SemanticTree::PushInt(*v),
+            ParseTree::PushString(v) => SemanticTree::PushString(v.clone()),
+            ParseTree::PushBool(v) => SemanticTree::PushBool(*v),
+            ParseTree::PushChar(v) => SemanticTree::PushChar(*v),
+            ParseTree::Intrinsic(v) => SemanticTree::Intrinsic(v.clone()),
+            ParseTree::If(body, else_body) => {
+                let body = body.into_iter().map(|x| x.internals_to_semantic()).collect::<Result<_>>()?;
+                let else_body = match else_body {
+                    Some(else_body) => {
+                        let statements = else_body.into_iter().map(|x| x.internals_to_semantic());
+
+                        let statements = statements.collect::<Result<_>>()?;
+
+                        Some(statements)
+                    },
+                    None => None
+                };
+                
+                SemanticTree::If(body, else_body)
+            }
+            ParseTree::While(cond, body) => {
+                let cond = cond.iter().map(|x| x.internals_to_semantic()).into_iter().collect::<Result<_>>()?;
+                let body = body.iter().map(|x| x.internals_to_semantic()).into_iter().collect::<Result<_>>()?;
+                
+                SemanticTree::While(cond, body)
+            },
+            ParseTree::Loop(body) => {
+                SemanticTree::Loop(body.iter().map(|x| x.internals_to_semantic()).into_iter().collect::<Result<_>>()?)
+            }
+            ParseTree::Function(_, _, _, _) => return Err(anyhow!("Invalid function declaration in non global environment")),
+            ParseTree::FunctionCall(name) => SemanticTree::FunctionCall(name.to_string())
+        };
+
+        Ok(node)
+    }
+}
+
+#[derive(Debug)]
+pub enum SemanticTree {
+    PushInt(u64),
+    PushString(String),
+    PushBool(bool),
+    PushChar(u8),
+    Intrinsic(Intrinsic),
+
+    If(Vec<SemanticTree>, Option<Vec<SemanticTree>>),
+
+    While(Vec<SemanticTree>, Vec<SemanticTree>),
+    Loop(Vec<SemanticTree>),
+
+    FunctionCall(String),
+    Function(String, Vec<StackPoint>, Vec<StackPoint>, Vec<SemanticTree>)
+}
+
+#[derive(Clone)]
+struct UserDefinedFunction {
+    name: String,
+    input: Vec<StackPoint>,
+    output: Vec<StackPoint>
+}
+
+impl UserDefinedFunction {
+    fn label_name(&self) -> Result<String> {
+        let mut result = String::new();
+
+        result.push_str("fn_");
+        result.push_str(&self.name);
+        result.push_str("_");
+        for input in self.input.iter() {
+            write!(result, "{input}")?;
+        }
+
+        result.push_str("$");
+        for output in self.output.iter() {
+            write!(result, "{output}")?;
+        }
+
+        return Ok(result);
+    }
+}
+
+#[derive(Clone)]
+pub struct SemanticContext {
+    functions: HashMap<String, UserDefinedFunction>
+}
+
+impl SemanticContext {
+    pub fn new() -> SemanticContext {
+        SemanticContext { functions: HashMap::new() }
+    }
+}
+
+pub struct SemanticAnalyzer {
+    context: SemanticContext
+}
+
+impl SemanticAnalyzer {
+    pub fn new() -> Self {
+        SemanticAnalyzer{
+            context: SemanticContext::new()
+        }
+    }
+
+    pub fn get_context(&self) -> &SemanticContext {
+        &self.context
+    }
+
+    pub fn analyze_program(&mut self, actions: &[ParseTree]) -> Result<Vec<SemanticTree>> {
+        let mut result = vec![];
+
+        for action in actions {
+            let node = match action {
+                ParseTree::Function(name, input_stack, output_stack, body) => {
+                    if let Some(_) = self.context.functions.get(name) {
+                        return Err(anyhow!("Invalid redeclaration of function {name}"));
+                    }
+
+                    let function = UserDefinedFunction {
+                        name: name.clone(),
+                        input: input_stack.clone(),
+                        output: output_stack.clone()
+                    };
+
+                    self.context.functions.insert(name.clone(), function);
+                    
+                    let body = body.clone()
+                        .into_iter().map(|x| x.internals_to_semantic())
+                        .collect::<Result<_>>()?;
+
+                    SemanticTree::Function(name.clone(), input_stack.clone(), output_stack.clone(), body)
+                }
+                _ => return Err(anyhow!("Invalid statement {action:?} in global scope"))
+            };
+
+            result.push(node);
+        }
+
+        return Ok(result);
+    }
 }
 
 pub struct Codegen {
     label_count: usize,
-    pb: BytecodeBuilder
+    pb: BytecodeBuilder,
+    semantic_context: SemanticContext
 }
 
 impl Codegen {
-    pub fn new() -> Self {
-        Codegen { label_count: 0, pb: BytecodeBuilder::new() }
+    pub fn new(semantic_context: SemanticContext) -> Self {
+        Codegen { label_count: 0, pb: BytecodeBuilder::new(), semantic_context }
     }
 
-    pub fn generate_program(&mut self, actions: &[Action]) -> Result<()> {
+    pub fn generate_program(&mut self, actions: &[SemanticTree]) -> Result<()> {
+        if let Some(main_func) = self.semantic_context.functions.get("main") {
+            self.pb.emit(bytecode::Instruction::PushLabel(main_func.label_name()?));
+            self.pb.emit_instruction(bytecode::Opcode::Cll);
+            self.pb.emit_instruction(bytecode::Opcode::Ext);
+        }
+
+        self.generate_scope(actions)
+    }
+
+    pub fn generate_scope(&mut self, actions: &[SemanticTree]) -> Result<()> {
         for action in actions.into_iter() {
             match action {
-                Action::PushInt(val) => self.pb.emit(bytecode::Instruction::Push(*val)),
-                Action::PushString(val) => {
+                SemanticTree::PushInt(val) => self.pb.emit(bytecode::Instruction::Push(*val)),
+                SemanticTree::PushString(val) => {
                     self.pb.emit(bytecode::Instruction::String(val.clone()));
                 }
-                Action::PushBool(val) => self.pb.emit(bytecode::Instruction::PushByte(*val as u8)),
-                Action::PushChar(c) => {
+                SemanticTree::PushBool(val) => self.pb.emit(bytecode::Instruction::PushByte(*val as u8)),
+                SemanticTree::PushChar(c) => {
                     self.pb.emit(bytecode::Instruction::PushByte(*c));
                 }
-                Action::Intrinsic(intr) => {
+                SemanticTree::Intrinsic(intr) => {
                     match intr {
                         Intrinsic::Add => self.pb.emit_instruction(bytecode::Opcode::Add),
                         Intrinsic::Sub => self.pb.emit_instruction(bytecode::Opcode::Sub),
                         Intrinsic::Mul => self.pb.emit_instruction(bytecode::Opcode::Mul),
                         Intrinsic::Mod => self.pb.emit_instruction(bytecode::Opcode::Mod),
                         Intrinsic::LessThan => self.pb.emit_instruction(bytecode::Opcode::Lt),
+                        Intrinsic::GreaterThan => self.pb.emit_instruction(bytecode::Opcode::Gt),
                         Intrinsic::Equals => self.pb.emit_instruction(bytecode::Opcode::Equ),
                         Intrinsic::NotEquals => {
                             self.pb.emit_instruction(bytecode::Opcode::Equ);
@@ -87,18 +251,18 @@ impl Codegen {
                         Intrinsic::Break => self.pb.emit_instruction(bytecode::Opcode::Bkp),
                     }
                 }
-                Action::Loop(contents) => {
+                SemanticTree::Loop(contents) => {
                     let loop_label = self.pb.create_label(&format!("loop_label_{}", self.label_count));
                     self.label_count += 1;
 
                     self.pb.link_label(&loop_label)?;
                     
-                    self.generate_program(&contents)?;
+                    self.generate_scope(&contents)?;
 
                     self.pb.emit(bytecode::Instruction::PushLabel(loop_label));
                     self.pb.emit_instruction(bytecode::Opcode::Jmp);
                 }
-                Action::If(contents, else_contents) => {
+                SemanticTree::If(contents, else_contents) => {
                     let else_label = self.pb.create_label(&format!("if_else_label_{}", self.label_count));
                     self.label_count += 1;
 
@@ -107,21 +271,21 @@ impl Codegen {
 
                     self.pb.emit(bytecode::Instruction::PushLabel(else_label.clone()));
                     self.pb.emit_instruction(bytecode::Opcode::Jpf);
-                    self.generate_program(&contents)?;
+                    self.generate_scope(&contents)?;
 
                     if let Some(else_contents) = else_contents {
                         self.pb.emit(bytecode::Instruction::PushLabel(end_label.clone()));
                         self.pb.emit_instruction(bytecode::Opcode::Jmp);
 
                         self.pb.link_label(&else_label)?;
-                        self.generate_program(&else_contents)?;
+                        self.generate_scope(&else_contents)?;
                     } else {
                         self.pb.link_label(&else_label)?;
                     }
 
                     self.pb.link_label(&end_label)?;
                 },
-                Action::While(condition, body) => {
+                SemanticTree::While(condition, body) => {
                     let go_back_label = self.pb.create_label(&format!("go_back_while_{}", self.label_count));
                     self.label_count += 1;
 
@@ -129,17 +293,46 @@ impl Codegen {
                     self.label_count += 1;
 
                     self.pb.link_label(&go_back_label)?;
-                    self.generate_program(&condition)?;
+                    self.generate_scope(&condition)?;
 
                     self.pb.emit(bytecode::Instruction::PushLabel(break_label.clone()));
                     self.pb.emit_instruction(bytecode::Opcode::Jpf);
 
-                    self.generate_program(&body)?;
+                    self.generate_scope(&body)?;
 
                     self.pb.emit(bytecode::Instruction::PushLabel(go_back_label.clone()));
                     self.pb.emit_instruction(bytecode::Opcode::Jmp);
 
                     self.pb.link_label(&break_label)?;
+                }
+                SemanticTree::FunctionCall(name) => {
+                    let function = self.semantic_context.functions.get(name)
+                        .expect(format!("Function {name} should have been semantically analyzed").as_str());
+
+                    let label_name = function.label_name()?;
+                    let fn_label = self.pb.create_label(&label_name);
+
+                    self.pb.emit(bytecode::Instruction::PushLabel(fn_label));
+                    self.pb.emit_instruction(bytecode::Opcode::Cll);
+                }
+                SemanticTree::Function(name, input_stack, _, body) => {
+                    let function = self.semantic_context.functions.get(name).expect(format!("Function {name} should have been semantically analyzed").as_str()).clone();
+
+                    let label_name = function.label_name()?;
+                    let fn_label = self.pb.create_label(&label_name);
+
+                    self.pb.link_label(&fn_label)?;
+                    
+                    let args_size = input_stack.iter().map(|x| x.size()).reduce(|acc, e| acc + e).unwrap_or(0);
+
+                    if args_size > 0 {
+                        self.pb.emit(bytecode::Instruction::Push(args_size as u64));
+                        self.pb.emit_instruction(bytecode::Opcode::Tks);
+                    }
+
+                    self.generate_scope(&body)?;
+
+                    self.pb.emit_instruction(bytecode::Opcode::Ret);
                 }
             }
         }
@@ -160,31 +353,55 @@ pub enum StackPoint {
     Ptr // This means: bottom [Ptr*, U64] top
 }
 
+impl StackPoint {
+    fn size(&self) -> usize {
+        match self {
+            StackPoint::U8 => 1,
+            StackPoint::U64 => 8,
+            StackPoint::Bool => 1,
+            StackPoint::Ptr => 8
+        }
+    }
+}
+
+impl std::fmt::Display for StackPoint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StackPoint::Bool => f.write_str("bool"),
+            StackPoint::U8 => f.write_str("u8"),
+            StackPoint::U64 => f.write_str("u64"),
+            StackPoint::Ptr => f.write_str("ptr"),
+        }
+    }
+}
+
 pub struct Typechecker {
-    stack_tracker: Vec<StackPoint>
+    stack_tracker: Vec<StackPoint>,
+    semantic_context: SemanticContext
 }
 
 impl Typechecker {
-    pub fn new() -> Self {
+    pub fn new(semantic_context: SemanticContext) -> Self {
         Typechecker {
-            stack_tracker: vec![]
+            stack_tracker: vec![],
+            semantic_context
         }
     }
 
-    fn typecheck_action(&mut self, action: &Action) -> Result<()> {
+    fn typecheck_action(&mut self, action: &SemanticTree) -> Result<()> {
         match action {
-            Action::PushInt(_) => {
+            SemanticTree::PushInt(_) => {
                 self.stack_tracker.push(StackPoint::U64);
             },
-            Action::PushString(_) => {
+            SemanticTree::PushString(_) => {
                 self.stack_tracker.push(StackPoint::Ptr);
                 self.stack_tracker.push(StackPoint::U64);
             },
-            Action::PushBool(_) => {
+            SemanticTree::PushBool(_) => {
                 self.stack_tracker.push(StackPoint::Bool);
             },
-            Action::PushChar(_) => self.stack_tracker.push(StackPoint::U8),
-            Action::Intrinsic(intr) => {
+            SemanticTree::PushChar(_) => self.stack_tracker.push(StackPoint::U8),
+            SemanticTree::Intrinsic(intr) => {
                 match intr {
                     Intrinsic::Add | Intrinsic::Sub | Intrinsic::Mul | Intrinsic::Mod => {
                         let a = self.stack_tracker.pop();
@@ -237,7 +454,7 @@ impl Typechecker {
                             }
                         }
                     },
-                    Intrinsic::LessThan => {
+                    Intrinsic::LessThan | Intrinsic::GreaterThan => {
                         let a = self.stack_tracker.pop();
                         let b = self.stack_tracker.pop();
 
@@ -246,7 +463,7 @@ impl Typechecker {
                                 self.stack_tracker.push(StackPoint::Bool);
                             }
                             _ => {
-                                return Err(anyhow!("Intrinsic LessThan needs 2 u64 values on the stack"));
+                                return Err(anyhow!("Intrinsic {intr:?} needs 2 u64 values on the stack"));
                             }
                         }
                     },
@@ -335,10 +552,10 @@ impl Typechecker {
                     Intrinsic::Break => {}
                 }
             }
-            Action::Loop(contents) => {
+            SemanticTree::Loop(contents) => {
                 self.typecheck_subblock(&contents, Some(&[]))?;
             }
-            Action::While(condition, body) => {
+            SemanticTree::While(condition, body) => {
                 let mut stack_before = self.stack_tracker.clone();
                 for action in condition {
                     self.typecheck_action(action)?;
@@ -355,7 +572,7 @@ impl Typechecker {
 
                 self.typecheck_subblock(&body, Some(&expected_output))?;
             }
-            Action::If(contents, else_contents) => {
+            SemanticTree::If(contents, else_contents) => {
                 let condition = self.stack_tracker.pop();
                 match condition {
                     Some(StackPoint::Bool) => {},
@@ -368,12 +585,35 @@ impl Typechecker {
                     self.typecheck_subblock(&else_contents, Some(&branch_output))?;
                 }
             }
+            SemanticTree::FunctionCall(name) => {
+                let function = self.semantic_context.functions.get(name)
+                    .expect(format!("Call to unknown function {name}.").as_str());
+
+                let mut input = function.input.clone();
+                input.reverse();
+
+                for expected_input in &input {
+                    let stack = self.stack_tracker.pop()
+                        .ok_or(anyhow!("Function call to {name} needed {expected_input:?} on the stack but found nothing"))?;
+
+                    if stack != *expected_input {
+                        return Err(anyhow!("Function call to {name} needed {expected_input:?} on the stack but found {stack:?}"));
+                    }
+                }
+                
+                for output in &function.output {
+                    self.stack_tracker.push(output.clone());
+                }
+            }
+            SemanticTree::Function(name, input_stack, output_stack, body) => {
+                self.typecheck_function(&body, &input_stack, &output_stack).context(format!("Typechecking function {name} failed"))?;
+            }
         }
 
         Ok(())
     }
 
-    pub fn typecheck_scope(&mut self, actions: &[Action], output: Option<&[StackPoint]>) -> Result<Vec<StackPoint>> {
+    pub fn typecheck_scope(&mut self, actions: &[SemanticTree], output: Option<&[StackPoint]>) -> Result<Vec<StackPoint>> {
         for action in actions.into_iter() {
             self.typecheck_action(action)?;
         }
@@ -387,11 +627,11 @@ impl Typechecker {
         Ok(self.stack_tracker.clone())
     }
 
-    fn typecheck_subblock(&mut self, actions: &[Action], output: Option<&[StackPoint]>) -> Result<Vec<StackPoint>> {
+    fn typecheck_subblock(&mut self, actions: &[SemanticTree], output: Option<&[StackPoint]>) -> Result<Vec<StackPoint>> {
         let prev_stack = self.stack_tracker.clone();
         let mut subchecker = self.subchecker(prev_stack)?;
 
-        let result = subchecker.typecheck_scope(actions, output)?;
+        let result = subchecker.typecheck_scope(actions, output).context("Subblock typecheck failed")?;
         if output.is_some() {
             self.stack_tracker = result.clone();
         }
@@ -399,8 +639,16 @@ impl Typechecker {
         Ok(result)
     }
 
+    fn typecheck_function(&mut self, body: &[SemanticTree], input: &[StackPoint], output: &[StackPoint]) -> Result<Vec<StackPoint>> {
+        let mut subchecker = self.subchecker(input.to_owned())?;
+
+        let _ = subchecker.typecheck_scope(body, Some(output))?;
+
+        Ok(vec![])
+    }
+
     fn subchecker(&self, input: Vec<StackPoint>) -> Result<Typechecker> {
-        let mut new_checker = Typechecker::new();
+        let mut new_checker = Typechecker::new(self.semantic_context.clone());
         new_checker.stack_tracker = input;
 
         Ok(new_checker)

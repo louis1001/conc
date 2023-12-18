@@ -1,21 +1,22 @@
+fn main || do
+    1 while dup 200 < do
+        dup 3 % 0 = if
+            "Fizz" puts
+        end
 
-1 while dup 200 < do
-    dup 3 % 0 = if
-        "Fizz" puts
-    end
+        dup 5 % 0 = if
+            "Buzz" puts
+        end
 
-    dup 5 % 0 = if
-        "Buzz" puts
-    end
+        dup 3 %
+        over 5 %
+        * 0 !=     # (x % 3) * (x % 5) != 0 -> x isn't multiple of 3 or 5
+        if
+            dup debug
+        end
 
-    dup 3 %
-    over 5 %
-    * 0 !=     # (x % 3) * (x % 5) != 0 -> x isn't multiple of 3 or 5
-    if
-        dup debug
-    end
-
-    '\n' putc
-    
-    1 +
-end drop
+        '\n' putc
+        
+        1 +
+    end drop
+end

@@ -1,1 +1,3 @@
-10 20 + drop
+fn main || do
+    10 20 + drop
+end

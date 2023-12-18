@@ -1,10 +1,12 @@
 # A fibonacci example
 
-1 0
-while dup 200 < do
-    dup rot +
-    dup debug
-    ' ' putc
-end
+fn main || do
+    1 0
+    while dup 1000 < do
+        dup rot +
+        dup debug
+        '\n' putc
+    end
 
-drop drop
+    drop drop
+end

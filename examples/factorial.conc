@@ -1,0 +1,17 @@
+fn main || do
+    6
+    "Factorial of " puts dup debug ": " puts
+    !factorial
+
+    debug
+    '\n' putc
+end
+
+fn factorial |u64| -> |u64| do
+#   n > 2: n * factorial(n-1)
+    dup 2 > if
+        dup 1 - # n-1
+        !factorial *
+    # else return n
+    end
+end

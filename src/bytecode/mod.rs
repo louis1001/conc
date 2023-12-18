@@ -84,6 +84,8 @@ pub enum Opcode {
     Drp = 0x16,
     Rot = 0x17,
     Ovr = 0x18,
+    Ret = 0x23,
+    Tks = 0x24,
     Ref = 0x30,
     Rf8 = 0x31,
     Ps8 = 0x40,
@@ -218,6 +220,8 @@ impl ProgramBuilder {
     }
 
     pub fn create_label(&mut self, name: &str) -> String {
+        if self.labels.contains_key(name) { return name.to_string(); }
+        
         self.labels.insert(name.to_string(), None);
 
         name.to_string()

@@ -7,34 +7,36 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'vm_in_rust'",
+            "name": "Debug executable 'conc'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=vm_in_rust",
-                    "--package=vm_in_rust"
+                    "--bin=conc",
+                    "--package=conc",
                 ],
                 "filter": {
-                    "name": "vm_in_rust",
+                    "name": "conc",
                     "kind": "bin"
                 }
             },
-            "args": [],
+            "args": [
+                "examples/factorial.conc"
+            ],
             "cwd": "${workspaceFolder}"
         },
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'vm_in_rust'",
+            "name": "Debug unit tests in executable 'conc'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=vm_in_rust",
-                    "--package=vm_in_rust"
+                    "--bin=conc",
+                    "--package=conc"
                 ],
                 "filter": {
-                    "name": "vm_in_rust",
+                    "name": "conc",
                     "kind": "bin"
                 }
             },
