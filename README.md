@@ -14,7 +14,15 @@ That said, I'm already doing the stack-based typechecking, but that was also ins
 A basic program needs a `main` function, and this can return either nothing or a u64 to pass as status code.
 
 ```
+# With no return:
 fn main || do
+end
+```
+
+```
+# Returning a u64:
+fn main || -> |u64| do
+    0
 end
 ```
 
