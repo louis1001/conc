@@ -7,8 +7,6 @@ use crate::conc::frontend::StackType;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Write, Debug};
 
-use uuid::Uuid;
-
 #[derive(Debug, Clone)]
 pub enum Intrinsic {
     Add,
@@ -117,19 +115,17 @@ pub enum SemanticTree {
     MemberAccess(String),
 
     FunctionCall(String),
-    Function(String, Uuid, Vec<SemanticTree>)
+    Function(String, Vec<SemanticTree>)
 }
 
 #[derive(Clone, Debug)]
 struct UserDefinedStruct {
-    uuid: Uuid,
     name: String,
     members: Vec<(String, StackType)>
 }
 
 #[derive(Clone)]
 struct UserDefinedFunction {
-    uuid: Uuid,
     name: String,
     input: Vec<StackType>,
     output: Vec<StackType>
@@ -276,10 +272,7 @@ impl SemanticAnalyzer {
                         return Err(anyhow!("Invalid redeclaration of function {name}"));
                     }
 
-                    let id = Uuid::new_v4();
-
                     let function = UserDefinedFunction {
-                        uuid: id.clone(),
                         name: name.clone(),
                         input: input_stack.clone(),
                         output: output_stack.clone()
@@ -291,7 +284,7 @@ impl SemanticAnalyzer {
                         .into_iter().map(|x| x.internals_to_semantic())
                         .collect::<Result<_>>()?;
 
-                    SemanticTree::Function(name.clone(), id, body)
+                    SemanticTree::Function(name.clone(), body)
                 }
                 ParseTree::Struct(name, members) => {
                     if let Some(_) = self.context.structs.get(name) {
@@ -299,7 +292,6 @@ impl SemanticAnalyzer {
                     }
 
                     let defined_struct = UserDefinedStruct {
-                        uuid: Uuid::new_v4(),
                         name: name.clone(),
                         members: members.clone()
                     };
@@ -439,7 +431,7 @@ pub enum TypecheckedTree {
     MemberAccess{struct_size: usize, member_offset: usize, member_type: StackPoint},
 
     FunctionCall(String),
-    Function(String, Uuid, Vec<TypecheckedTree>),
+    Function(String, Vec<TypecheckedTree>),
 
     NoOp
 }
@@ -799,14 +791,14 @@ impl Typechecker {
 
                 TypecheckedTree::FunctionCall(name.clone())
             }
-            SemanticTree::Function(name, id, body) => {
+            SemanticTree::Function(name, body) => {
                 let function = self.semantic_context.functions.get(name)
                     .expect(format!("Function {name} should have been semantically analyzed").as_str())
                     .clone();
                 
                 let (body, _) = self.typecheck_function(&body, &function.input, &function.output).context(format!("Typechecking function {name} failed"))?;
 
-                TypecheckedTree::Function(name.clone(), *id, body)
+                TypecheckedTree::Function(name.clone(), body)
             }
         };
 
@@ -995,7 +987,7 @@ impl Codegen {
                     self.pb.emit(bytecode::Instruction::PushLabel(fn_label));
                     self.pb.emit_instruction(bytecode::Opcode::Cll);
                 }
-                TypecheckedTree::Function(name, id, body) => {
+                TypecheckedTree::Function(name, body) => {
                     let function = self.semantic_context.functions.get(name).expect(format!("Function {name} should have been semantically analyzed").as_str()).clone();
 
                     let label_name = function.label_name()?;

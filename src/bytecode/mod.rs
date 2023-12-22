@@ -210,7 +210,7 @@ impl Instruction {
         match self {
             Instruction::Push(_) | Instruction::PushLabel(_) => size_of::<u64>(),
             Instruction::DropBytes(_) => size_of::<u64>(),
-            Instruction::DupBytes { offset, n } => size_of::<u64>() * 2,
+            Instruction::DupBytes { offset: _, n: _ } => size_of::<u64>() * 2,
             Instruction::PushByte(_) => size_of::<u8>(),
             Instruction::String(val) => {
                 size_of::<u64>() +      // len 
