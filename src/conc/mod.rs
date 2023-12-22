@@ -4,7 +4,7 @@ use anyhow::{Result, anyhow, Context};
 use crate::bytecode::{self, ProgramBuilder as BytecodeBuilder};
 use crate::conc::frontend::StackType;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::{Write, Debug};
 
 use uuid::Uuid;
@@ -149,14 +149,17 @@ impl SemanticContext {
 
 pub struct SymbolResolver<'a> {
     unresolved_context: &'a SemanticContext,
-    resolved_context: ResolvedSemanticContext
+    resolved_context: ResolvedSemanticContext,
+
+    currently_resolving: HashSet<String>,
 }
 
 impl<'a> SymbolResolver<'a> {
     fn new(unresolved_context: &'a SemanticContext) -> SymbolResolver {
         SymbolResolver {
             unresolved_context,
-            resolved_context: ResolvedSemanticContext::new()
+            resolved_context: ResolvedSemanticContext::new(),
+            currently_resolving: HashSet::new()
         }
     }
 
@@ -167,7 +170,12 @@ impl<'a> SymbolResolver<'a> {
             StackType::U64 => StackPoint::U64,
             StackType::Ptr => StackPoint::Ptr,
             StackType::Custom(name) => {
-                let resolved = self.resolve_struct(&name)?
+                if self.currently_resolving.contains(&name) {
+                    return Err(anyhow!("Found a recursive dependency on struct {}", name));
+                }
+
+                let resolved = self.resolve_struct(&name)
+                    .context(format!("Resolving struct {name}"))?
                     .ok_or(anyhow!("Type {name} is unknown"))?;
 
                 StackPoint::Struct(resolved.name.clone())
@@ -181,6 +189,8 @@ impl<'a> SymbolResolver<'a> {
         if let Some(rs) = self.resolved_context.structs.get(name) {
             return Ok(Some(rs.clone()));
         }
+
+        self.currently_resolving.insert(name.to_string());
 
         let s = match self.unresolved_context.structs.get(name) {
             Some(s) => s.clone(),
@@ -203,6 +213,8 @@ impl<'a> SymbolResolver<'a> {
         };
 
         self.resolved_context.structs.insert(name.to_string(), resolved_struct.clone());
+
+        self.currently_resolving.remove(name);
 
         Ok(Some(resolved_struct.clone()))
     }
