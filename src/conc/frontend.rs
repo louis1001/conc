@@ -2,7 +2,53 @@ use anyhow::{Result, anyhow};
 use pest::Parser as PestParser;
 use pest_derive::Parser as PestParser;
 
-use crate::conc::{ParseTree, Intrinsic};
+#[derive(Debug, Clone)]
+pub enum Intrinsic {
+    Add,
+    Sub,
+    Mul,
+    Mod,
+
+    Print,
+    PrintChar,
+    
+    LessThan,
+    GreaterThan,
+    Equals,
+    NotEquals,
+    Not,
+    Or,
+
+    Drop,
+    Dup,
+    Rot,
+    Swap,
+    Over,
+    Debug,
+
+    Break
+}
+
+#[derive(Debug, Clone)]
+pub enum ParseTree {
+    PushInt(u64),
+    PushString(String),
+    PushBool(bool),
+    PushChar(u8),
+    Intrinsic(Intrinsic),
+
+    If(Vec<ParseTree>, Option<Vec<ParseTree>>),
+
+    While(Vec<ParseTree>, Vec<ParseTree>),
+    Loop(Vec<ParseTree>),
+
+    Struct(String, Vec<(String, StackType)>),
+    ConstructStruct(String),
+    MemberAccess(String),
+
+    FunctionCall(String),
+    Function(String, Vec<StackType>, Vec<StackType>, Vec<ParseTree>)
+}
 
 #[derive(Debug, Clone)]
 pub enum StackType {
