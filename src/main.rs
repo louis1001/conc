@@ -14,13 +14,15 @@ fn main() -> Result<()> {
     let mut sem_an = conc::SemanticAnalyzer::new();
     let actions = conc::frontend::parse_conc(&code)?;
 
-    let tree = sem_an.analyze_program(&actions)?;
+    let semantic_tree = sem_an.analyze_program(&actions)?;
 
-    let mut typecheck = conc::Typechecker::new(sem_an.get_context().clone());
+    let context = sem_an.resolved_context()?;
+
+    let mut typecheck = conc::Typechecker::new(context.clone());
     
-    typecheck.typecheck_scope(&tree, Some(&[])).context("Global typecheck failed")?;
+    let (tree, _) = typecheck.typecheck_scope(&semantic_tree, Some(&[])).context("Global typecheck failed")?;
 
-    let mut codegen = conc::Codegen::new(sem_an.get_context().clone());
+    let mut codegen = conc::Codegen::new(context.clone());
     codegen.generate_program(&tree)?;
     let program = codegen.get_program()?;
     program.dissassemble()?;

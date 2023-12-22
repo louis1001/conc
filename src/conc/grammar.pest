@@ -1,5 +1,8 @@
 WHITESPACE = _{ (" " | "\t" | "\n")+ }
-COMMENT    = _{ "#" ~ (!("\n" | EOI) ~ ANY)* ~ ("\n" | EOI) }
+
+LINE_COMMENT   = _{ "#" ~ (!("\n" | EOI) ~ ANY)* ~ ("\n" | EOI) }
+NESTED_COMMENT = _{ "#{" ~ (NESTED_COMMENT | (!("}#") ~ ANY))* ~ "}#" }
+COMMENT        = _{ NESTED_COMMENT | LINE_COMMENT }
 
 statement_list = { statement* }
 
@@ -11,6 +14,7 @@ false = { "false" }
 drop         = { "drop" }
 dup          = { "dup" }
 over         = { "over" }
+swap         = { "swap" }
 add          = { "+" }
 sub          = { "-" }
 mul          = { "*" }
@@ -21,19 +25,18 @@ equals       = { "=" }
 not_equals   = { "!=" }
 not          = { "not" }
 or           = { "or" }
-
-puts  = { "puts" }
-putc  = { "putc" }
-debug = { "debug" }
-rot   = { "rot" }
-
-break = { "break" }
+puts         = { "puts" }
+putc         = { "putc" }
+debug        = { "debug" }
+rot          = { "rot" }
+break        = { "break" }
 
 intrinsic = _{
     drop
   | dup
   | over
   | rot
+  | swap
   | debug
   | add
   | sub
@@ -43,6 +46,7 @@ intrinsic = _{
   | not_equals
   | less_than
   | greater_than
+  | not
   | or
   | puts
   | putc
@@ -55,35 +59,53 @@ BLOCK_TERMINATOR = _{ "end" }
 
 integer = @{ (ASCII_NONZERO_DIGIT ~ (ASCII_DIGIT)*) | "0" }
 
-escape_target = !{ "n" | "r" | "t" | "\"" | "\'" | "\\" }
-
-escaped_character = _{ "\\" ~ escape_target }
-
-raw_string       = @{ raw_character+ }
-string_internals = _{ (escaped_character | raw_string)* }
-
 // https://github.com/pest-parser/book/blob/master/src/examples/rust/literals.md#strings
-string = ${ "\"" ~ string_internals ~ "\"" }
-
+escape_target       = !{ "n" | "r" | "t" | "\"" | "\'" | "\\" }
+escaped_character   = _{ "\\" ~ escape_target }
+raw_string          = @{ raw_character+ }
+string_internals    = _{ (escaped_character | raw_string)* }
+string              = ${ "\"" ~ string_internals ~ "\"" }
 raw_character       =  { (!("\\" | "\"") ~ ANY) }
 character_internals = _{ escaped_character | raw_character }
 character           = ${ "\'" ~ character_internals ~ "\'" }
 
-loop_st =  { "loop" ~ statement_list ~ BLOCK_TERMINATOR }
-else_st = _{ "else" ~ statement_list }
-if_st   =  { "if" ~ statement_list ~ (else_st)? ~ BLOCK_TERMINATOR }
+loop_st  =  { "loop" ~ statement_list ~ BLOCK_TERMINATOR }
+else_st  = _{ "else" ~ statement_list }
+if_st    =  { "if" ~ statement_list ~ (else_st)? ~ BLOCK_TERMINATOR }
+while_st =  { "while" ~ statement_list ~ "do" ~ statement_list ~ BLOCK_TERMINATOR }
 
-while_st = { "while" ~ statement_list ~ "do" ~ statement_list ~ BLOCK_TERMINATOR }
+func_call     = ${ "!" ~ identifier }
+struct_constr = ${ "@" ~ identifier }
 
-func_call = ${ "!" ~ identifier }
+member_access = ${ "." ~ identifier }
 
-identifier = @{ LOWERCASE_LETTER ~ (ASCII_ALPHANUMERIC | "_")* }
+identifier = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
 
 builtin_type =  { "u8" | "u64" | "bool" | "ptr" }
-data_type    = _{ builtin_type }
+user_type    = @{ identifier }
+data_type    = _{ builtin_type | user_type }
 
-stack_descripcion = { "|" ~ data_type* ~ "|" }
+stack_descripcion         =  { "|" ~ data_type* ~ "|" }
+binding_pair              = ${ identifier ~ ":" ~ data_type }
+binding_stack_descripcion =  { "|" ~ binding_pair* ~ "|" }
 
-function = { "fn" ~ identifier ~ stack_descripcion ~ ("->" ~ stack_descripcion)? ~ "do" ~ statement_list ~ BLOCK_TERMINATOR }
+function = {
+    "fn" ~ identifier ~ stack_descripcion ~ ("->" ~ stack_descripcion)? ~ "do" ~ statement_list ~ BLOCK_TERMINATOR
+}
 
-statement = _{ integer | string | character | intrinsic | loop_st | while_st | if_st | function | func_call }
+struct = { "struct" ~ identifier ~ binding_stack_descripcion }
+
+statement = _{
+    integer
+  | string
+  | character
+  | intrinsic
+  | loop_st
+  | while_st
+  | if_st
+  | struct
+  | struct_constr
+  | member_access
+  | function
+  | func_call
+}

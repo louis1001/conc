@@ -89,6 +89,8 @@ pub enum Opcode {
     Ref = 0x30,
     Rf8 = 0x31,
     Ps8 = 0x40,
+    Drn = 0x41,
+    Dpn = 0x42,
     Bkp = 0xFE,
     Ext = 0xFF
 }
@@ -134,6 +136,23 @@ impl Program {
 
                     // println!("\n-----\n{:?}\n-----\n", iter);
                 },
+                Opcode::Drn => {
+                    counter += std::mem::size_of::<u64>();
+                    let num = iter.cast_to::<u64>();
+                    
+                    print!("{:#04X}", num);
+                }
+                Opcode::Dpn => {
+                    counter += std::mem::size_of::<u64>();
+                    let num = iter.cast_to::<u64>();
+                    
+                    print!("offset: {:#04X} ", num);
+
+                    counter += std::mem::size_of::<u64>();
+                    let num = iter.cast_to::<u64>();
+                    
+                    print!("size: {:#04X}", num);
+                }
                 Opcode::Str => {
                     counter += std::mem::size_of::<u64>();
                     let num = iter.cast_to::<u64>();
@@ -179,6 +198,8 @@ pub enum Instruction {
     Push(u64),
     PushByte(u8),
     PushLabel(String),
+    DropBytes(u64),
+    DupBytes{offset: u64, n: u64},
     String(String),
     Single(Opcode),
 }
@@ -188,6 +209,8 @@ impl Instruction {
         1 +
         match self {
             Instruction::Push(_) | Instruction::PushLabel(_) => size_of::<u64>(),
+            Instruction::DropBytes(_) => size_of::<u64>(),
+            Instruction::DupBytes { offset, n } => size_of::<u64>() * 2,
             Instruction::PushByte(_) => size_of::<u8>(),
             Instruction::String(val) => {
                 size_of::<u64>() +      // len 
@@ -283,6 +306,15 @@ impl ProgramBuilder {
                     data.push(Opcode::Ps8.into());
                     data.push(*b);
                 }
+                Instruction::DropBytes(val) => {
+                    data.push(Opcode::Drn.into());
+                    data.extend_from_slice(&val.to_le_bytes());
+                },
+                Instruction::DupBytes{offset, n} => {
+                    data.push(Opcode::Dpn.into());
+                    data.extend_from_slice(&offset.to_le_bytes());
+                    data.extend_from_slice(&n.to_le_bytes());
+                },
                 Instruction::String(str) => {
                     data.push(Opcode::Str.into());
 

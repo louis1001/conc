@@ -1,0 +1,63 @@
+# WIP. I need intrinsics for pointer dereferencing
+
+struct Str | chars:ptr len:u64 |
+
+fn print_string |ptr u64| do
+    while dup 0 != do
+        swap
+        dup
+    end
+
+    drop drop
+end
+
+fn main || do
+
+end
+
+#{
+    # This is an example of memory dereferencing on the vm
+
+    psh 'start jmp
+# Setup point. Not executed unless called
+print_str: # Takes stack: bottom | str_ptr len | top
+    psh 2
+    psh 8
+    mul
+    tks
+string_print_loop:
+    dup
+    psh 0
+    equ
+    psh 'cleanup_string_print
+    jpt
+
+    # Stack at this point
+    # | str_ptr len |
+    swp
+    dup # | len str_ptr str_ptr |
+    rf8 # | len str_ptr |
+    ptc
+    inc # Move the string pointer one forward
+    swp
+    dec # len - 1
+
+    psh 'string_print_loop
+    jmp
+
+cleanup_string_print: # stack at this point | str_ptr len |
+    drp # drop the length
+    drp # drop the string pointer
+    ret
+
+start:
+    str "Hello, world\n"
+    psh 'print_str
+    cll
+    
+    str "Hey\n"
+    psh 'print_str
+    cll
+
+    ext
+}#

@@ -2,7 +2,28 @@ use anyhow::{Result, anyhow};
 use pest::Parser as PestParser;
 use pest_derive::Parser as PestParser;
 
-use crate::conc::{ParseTree, Intrinsic, StackPoint};
+use crate::conc::{ParseTree, Intrinsic};
+
+#[derive(Debug, Clone)]
+pub enum StackType {
+    Bool,
+    U8,
+    U64,
+    Ptr,
+    Custom(String)
+}
+
+impl StackType {
+    fn from_str(val: &str) -> Self {
+        match val {
+            "u64" => StackType::U64,
+            "u8" => StackType::U8,
+            "bool" => StackType::Bool,
+            "ptr" => StackType::Ptr,
+            _ => StackType::Custom(val.to_string())
+        }
+    }
+}
 
 #[derive(PestParser)]
 #[grammar = "conc/grammar.pest"]
@@ -40,8 +61,6 @@ pub fn parse_conc(code: &str) -> Result<Vec<ParseTree>> {
                     let char = s.chars().next()
                         .ok_or(anyhow!("Expected to have a character to escape"))?;
 
-                    println!("Escaping in `{s}` char: `{char}`");
-
                     let escaped = match char {
                         'n' => '\n',
                         'r' => '\r',
@@ -60,20 +79,27 @@ pub fn parse_conc(code: &str) -> Result<Vec<ParseTree>> {
         Ok(ParseTree::PushString(result))
     }
 
-    fn parse_stack_description(pairs: &mut Pairs<Rule>) -> Result<Vec<StackPoint>> {
+    fn parse_type(identifier: &str) -> Result<StackType> {
+        Ok(StackType::from_str(identifier))
+    }
+
+    fn parse_binding_pair(pairs: &mut Pairs<Rule>) -> Result<(String, StackType)> {
+        let name = pairs.next().ok_or(anyhow!("Expected a member name"))?.as_str();
+
+        let tp = pairs.next().ok_or(anyhow!("Expected a member type specification"))?;
+        let point = parse_type(tp.as_str())?;
+        
+        Ok((name.to_string(), point))
+    }
+
+    fn parse_binding_stack_description(pairs: &mut Pairs<Rule>) -> Result<Vec<(String, StackType)>> {
         let mut result = vec![];
         while let Some(tp) = pairs.next() {
             let rule = tp.as_rule();
 
             let point = match rule {
-                Rule::builtin_type => {
-                    match tp.as_str() {
-                        "u64" => StackPoint::U64,
-                        "u8" => StackPoint::U8,
-                        "bool" => StackPoint::Bool,
-                        "ptr" => StackPoint::Ptr,
-                        _ => return Err(anyhow!("Unknown type {}", tp.as_str()))
-                    }
+                Rule::binding_pair => {
+                    parse_binding_pair(&mut tp.into_inner())?
                 }
                 _ => unreachable!()
             };
@@ -82,6 +108,30 @@ pub fn parse_conc(code: &str) -> Result<Vec<ParseTree>> {
         }
 
         Ok(result)
+    }
+
+    fn parse_stack_description(pairs: &mut Pairs<Rule>) -> Result<Vec<StackType>> {
+        let mut result = vec![];
+        while let Some(tp) = pairs.next() {
+            let point = parse_type(tp.as_str())?;
+
+            result.push(point);
+        }
+
+        Ok(result)
+    }
+
+    fn parse_struct(pairs: Pairs<Rule>) -> Result<ParseTree> {
+        let mut pairs = pairs;
+        let name = pairs.next().ok_or(anyhow!("Expected an identifier"))?.as_str();
+
+        let mut stack_description = pairs.next()
+            .ok_or(anyhow!("Expected a stack description"))?
+            .into_inner();
+
+        let members = parse_binding_stack_description(&mut stack_description)?;
+
+        Ok(ParseTree::Struct(name.to_string(), members))
     }
 
     fn parse_function(pairs: Pairs<Rule>) -> Result<ParseTree> {
@@ -113,7 +163,7 @@ pub fn parse_conc(code: &str) -> Result<Vec<ParseTree>> {
 
         Ok(ParseTree::Function(name.to_string(), input_stack, output_stack, body))
     }
-
+    
     fn parse_value(pair: Pair<Rule>) -> Result<ParseTree> {
         match pair.as_rule() {
             Rule::r#true => Ok(ParseTree::PushBool(true)),
@@ -132,12 +182,12 @@ pub fn parse_conc(code: &str) -> Result<Vec<ParseTree>> {
             Rule::debug => Ok(ParseTree::Intrinsic(Intrinsic::Debug)),
             Rule::dup => Ok(ParseTree::Intrinsic(Intrinsic::Dup)),
             Rule::rot => Ok(ParseTree::Intrinsic(Intrinsic::Rot)),
+            Rule::swap => Ok(ParseTree::Intrinsic(Intrinsic::Swap)),
             Rule::over => Ok(ParseTree::Intrinsic(Intrinsic::Over)),
             Rule::puts => Ok(ParseTree::Intrinsic(Intrinsic::Print)),
             Rule::putc => Ok(ParseTree::Intrinsic(Intrinsic::PrintChar)),
             Rule::r#break => Ok(ParseTree::Intrinsic(Intrinsic::Break)),
             Rule::integer => Ok(ParseTree::PushInt(pair.as_str().parse()?)),
-            // FIXME: Do correct parsing of the string
             Rule::string => parse_string(pair.into_inner()),
             Rule::character => {
                 let rule = pair.clone().into_inner().next()
@@ -170,8 +220,7 @@ pub fn parse_conc(code: &str) -> Result<Vec<ParseTree>> {
                         };
                         let mut encoded = [0; 1];
                         escaped.encode_utf8(&mut encoded);
-
-                        println!("`{char}`: {encoded:?}");
+                        
                         Ok(ParseTree::PushChar(encoded[0]))
                     },
                     _ => unreachable!()
@@ -217,6 +266,23 @@ pub fn parse_conc(code: &str) -> Result<Vec<ParseTree>> {
 
                 Ok(ParseTree::While(condition, body))
             }
+            Rule::r#struct => {
+                let pairs = pair.clone().into_inner();
+
+                parse_struct(pairs)
+            }
+            Rule::struct_constr => {
+                let pairs = pair.clone().into_inner();
+
+                let name = pairs.as_str();
+                Ok(ParseTree::ConstructStruct(name.to_string()))
+            }
+            Rule::member_access => {
+                let pairs = pair.clone().into_inner();
+
+                let name = pairs.as_str();
+                Ok(ParseTree::MemberAccess(name.to_string()))
+            }
             Rule::function => {
                 let pairs = pair.clone().into_inner();
                 parse_function(pairs)
@@ -240,15 +306,19 @@ pub fn parse_conc(code: &str) -> Result<Vec<ParseTree>> {
             | Rule::BLOCK_TERMINATOR
             | Rule::WHITESPACE 
             | Rule::COMMENT
+            | Rule::LINE_COMMENT
+            | Rule::NESTED_COMMENT
             | Rule::raw_string
             | Rule::escaped_character
             | Rule::escape_target
             | Rule::string_internals
             | Rule::character_internals
             | Rule::raw_character
+            | Rule::user_type
+            | Rule::binding_pair
+            | Rule::binding_stack_descripcion
             | Rule::statement_list => {
-                println!("{pair:?}");
-                unreachable!()
+                unreachable!("{pair:?}")
             }
         }
     }

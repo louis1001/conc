@@ -1,0 +1,41 @@
+struct Fract | num:u64 denom:u64 |
+struct Vec2 | x:u64 y:Fract |
+
+fn zero_vec || -> |Vec2| do
+    0
+    1 3 @Fract
+    @Vec2 # @ prefix/intrinsic matches the struct's shape on the stack and if it fits,
+          # encapsulates it the type.
+end
+
+fn print_vec |Vec2| do
+    "Vec { x: " puts
+    .x debug
+    ", y: " puts
+    .y # Duplicates the Fract in y into the stack (without consuming it)
+        "Fract { " puts
+        .num debug
+        ", " puts
+        .denom debug
+        " } " puts
+    "}" puts
+
+    drop
+    
+    "\n" puts
+    drop
+end
+
+#{ # Testing a possible syntax for getting a reference to the member instead of copying it
+fn double_vec |Vec2| -> |Vec2| do
+    .x 2 * &x store # v.x = v.x * 2
+end
+}#
+
+fn main || do
+    !zero_vec # | Vec2 |
+    !print_vec # ||
+
+    # TODO: instance chaining
+    # !zero_vec :y:denom       # Same as `@Vec2 .y  .denom` except it drops the accessed values
+end
